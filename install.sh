@@ -73,12 +73,5 @@ EOF
 
 echo -e "\e[1;32m[OK] extractor.js creado.\e[0m"
 
-echo -e "\n\e[1;34m[5/5] VALIDANDO...\e[0m"
-node -c extractor.js > /dev/null 2>&1
-if [ $? -eq 0 ]; then 
-    echo -e "\e[1;32m[COMPLETO] Instalación exitosa.\e[0m"
-    echo -e "\e[1;33mPara iniciar: cd ~/extractor_ids && node extractor.js\e[0m\n"
-else 
-    echo -e "\e[1;31m[ERROR] Archivo corrupto.\e[0m"; 
-    exit 1; 
-fi
+echo -e "\n\e[1;34m[5/5] INICIANDO EXTRACTOR...\e[0m"
+cd $HOME/extractor_ids && node extractor.js
