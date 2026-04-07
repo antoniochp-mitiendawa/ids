@@ -1,20 +1,21 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-echo -e "\n\e[1;34m[1/5] INICIANDO ACTUALIZACIÓN DEL SISTEMA...\e[0m"
-pkg update -y && pkg upgrade -y
-if [ $? -eq 0 ]; then echo -e "\e[1;32m[OK] Sistema actualizado.\e[0m"; else echo -e "\e[1;31m[ERROR] Falló la actualización.\e[0m"; exit 1; fi
+echo -e "\n\e[1;34m[1/5] ACTUALIZANDO SISTEMA...\e[0m"
+pkg update -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" 2>/dev/null
+pkg upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" 2>/dev/null
+if [ $? -eq 0 ]; then echo -e "\e[1;32m[OK] Sistema actualizado.\e[0m"; else echo -e "\e[1;31m[ERROR] Falló actualización.\e[0m"; exit 1; fi
 
-echo -e "\n\e[1;34m[2/5] INSTALANDO HERRAMIENTAS BASE (Node.js, Git, Python)...\e[0m"
-pkg install -y nodejs git python clang make binutils
-if [ $? -eq 0 ]; then echo -e "\e[1;32m[OK] Herramientas instaladas.\e[0m"; else echo -e "\e[1;31m[ERROR] Falló la instalación de herramientas.\e[0m"; exit 1; fi
+echo -e "\n\e[1;34m[2/5] INSTALANDO HERRAMIENTAS...\e[0m"
+pkg install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" nodejs git python clang make binutils 2>/dev/null
+if [ $? -eq 0 ]; then echo -e "\e[1;32m[OK] Herramientas instaladas.\e[0m"; else echo -e "\e[1;31m[ERROR] Falló instalación.\e[0m"; exit 1; fi
 
-echo -e "\n\e[1;34m[3/5] PREPARANDO DIRECTORIO Y LIBRERÍAS DE WHATSAPP...\e[0m"
+echo -e "\n\e[1;34m[3/5] PREPARANDO DIRECTORIO Y LIBRERÍAS...\e[0m"
 mkdir -p $HOME/extractor_ids && cd $HOME/extractor_ids
-npm init -y > /dev/null
-npm install @whiskeysockets/baileys pino axios readline --force
-if [ $? -eq 0 ]; then echo -e "\e[1;32m[OK] Librerías instaladas correctamente.\e[0m"; else echo -e "\e[1;31m[ERROR] Falló NPM.\e[0m"; exit 1; fi
+npm init -y > /dev/null 2>&1
+npm install @whiskeysockets/baileys pino axios readline --force --silent 2>/dev/null
+if [ $? -eq 0 ]; then echo -e "\e[1;32m[OK] Librerías instaladas.\e[0m"; else echo -e "\e[1;31m[ERROR] Falló NPM.\e[0m"; exit 1; fi
 
-echo -e "\n\e[1;34m[4/5] CREANDO MOTOR DE EXTRACCIÓN (extractor.js)...\e[0m"
+echo -e "\n\e[1;34m[4/5] CREANDO EXTRACTOR...\e[0m"
 cat << 'EOF' > extractor.js
 const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, delay, DisconnectReason } = require("@whiskeysockets/baileys");
 const pino = require("pino");
@@ -70,14 +71,14 @@ async function iniciar() {
 iniciar();
 EOF
 
-echo -e "\e[1;32m[OK] Archivo extractor.js creado.\e[0m"
+echo -e "\e[1;32m[OK] extractor.js creado.\e[0m"
 
-echo -e "\n\e[1;34m[5/5] VALIDACIÓN FINAL...\e[0m"
-node -c extractor.js
+echo -e "\n\e[1;34m[5/5] VALIDANDO...\e[0m"
+node -c extractor.js > /dev/null 2>&1
 if [ $? -eq 0 ]; then 
-    echo -e "\e[1;32m[COMPLETO] Instalación exitosa. Para iniciar usa:\e[0m"
-    echo -e "\e[1;33mcd $HOME/extractor_ids && node extractor.js\e[0m\n"
+    echo -e "\e[1;32m[COMPLETO] Instalación exitosa.\e[0m"
+    echo -e "\e[1;33mPara iniciar: cd ~/extractor_ids && node extractor.js\e[0m\n"
 else 
-    echo -e "\e[1;31m[ERROR] El archivo se corrompió al escribirse. Reintenta.\e[0m"; 
+    echo -e "\e[1;31m[ERROR] Archivo corrupto.\e[0m"; 
     exit 1; 
 fi
