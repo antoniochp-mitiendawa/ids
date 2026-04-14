@@ -51,18 +51,14 @@ async function extraerCanalPorMensaje(sock, config) {
             const message = messages[0];
             const remoteJid = message.key.remoteJid;
             
-            // Verificar si es un canal (@newsletter)
             if (remoteJid && remoteJid.includes('@newsletter')) {
-                // Obtener nombre del canal si está disponible
                 let nombreCanal = "Sin nombre";
                 try {
-                    // Intentar obtener metadatos del canal
                     const metadata = await sock.newsletterMetadata(remoteJid);
                     if (metadata && metadata.name) {
                         nombreCanal = metadata.name;
                     }
                 } catch (e) {
-                    // Si no se puede obtener metadata, usar el ID como nombre temporal
                     nombreCanal = remoteJid.split('@')[0];
                 }
                 
@@ -86,7 +82,6 @@ async function extraerCanalPorMensaje(sock, config) {
                     console.log(`\x1b[31m[ERROR] Al enviar canal:\x1b[0m`, e.message);
                 }
                 
-                // Remover el listener y resolver la promesa
                 sock.ev.off('messages.upsert', handler);
                 resolve(true);
             }
@@ -116,7 +111,6 @@ async function iniciar() {
             console.log("\n\x1b[32m[OK] Conectado. Sincronizando grupos (15s)...\x1b[0m");
             await delay(15000);
             
-            // ========== GRUPOS (NO MODIFICADO) ==========
             try {
                 const chats = await sock.groupFetchAllParticipating();
                 const lista = Object.values(chats).map(g => ({ id: g.id, nombre: g.subject }));
@@ -125,28 +119,31 @@ async function iniciar() {
                 if (res.data.status === "success") console.log("\x1b[32m[ÉXITO] Hoja actualizada correctamente.\x1b[0m");
             } catch (e) { console.log("\x1b[31m[ERROR] Al enviar datos:\x1b[0m", e.message); }
             
-            // ========== NUEVO: EXTRACCIÓN DE CANALES POR MENSAJE ==========
             console.log("\n\x1b[1;33m═══════════════════════════════════════════════════════════════\x1b[0m");
             console.log("\x1b[1;36m[EXTRACTOR DE CANALES]\x1b[0m");
-            console.log("\x1b[33mPara extraer el ID de un canal, simplemente escribe CUALQUIER mensaje en ese canal.\x1b[0m");
-            console.log("\x1b[33mEl script detectará automáticamente el canal y guardará su ID.\x1b[0m");
             console.log("\x1b[1;33m═══════════════════════════════════════════════════════════════\x1b[0m\n");
             
-            let continuar = true;
-            let canalesExtraidos = 0;
+            const tieneCanales = await esperarConfirmacion("\x1b[33m[?] ¿Tienes canales que quieras extraer el ID? (si/no): \x1b[0m");
             
-            while (continuar) {
-                console.log(`\x1b[1;34m[CANAL ${canalesExtraidos + 1}]\x1b[0m Escribe un mensaje en el canal que deseas extraer...`);
-                await extraerCanalPorMensaje(sock, config);
-                canalesExtraidos++;
+            if (tieneCanales === 'si' || tieneCanales === 's' || tieneCanales === 'sí') {
+                let continuar = true;
+                let canalesExtraidos = 0;
                 
-                const respuesta = await esperarConfirmacion("\n\x1b[33m[?] ¿Tienes otro canal para extraer? (si/no): \x1b[0m");
-                if (respuesta !== 'si' && respuesta !== 's' && respuesta !== 'sí') {
-                    continuar = false;
+                while (continuar) {
+                    console.log(`\n\x1b[1;34m[CANAL ${canalesExtraidos + 1}]\x1b[0m Escribe un mensaje en el canal que deseas extraer...`);
+                    await extraerCanalPorMensaje(sock, config);
+                    canalesExtraidos++;
+                    
+                    const respuesta = await esperarConfirmacion("\n\x1b[33m[?] ¿Tienes otro canal para extraer? (si/no): \x1b[0m");
+                    if (respuesta !== 'si' && respuesta !== 's' && respuesta !== 'sí') {
+                        continuar = false;
+                    }
                 }
+                console.log(`\n\x1b[32m[FINALIZADO] Se extrajeron ${canalesExtraidos} canal(es). Saliendo...\x1b[0m`);
+            } else {
+                console.log("\n\x1b[33m[INFO] No se extrajeron canales. Saliendo...\x1b[0m");
             }
             
-            console.log(`\n\x1b[32m[FINALIZADO] Se extrajeron ${canalesExtraidos} canal(es). Saliendo...\x1b[0m`);
             process.exit(0);
         }
         if (c === 'close' && ld.error?.output?.statusCode !== DisconnectReason.loggedOut) iniciar();
