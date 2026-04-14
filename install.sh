@@ -63,6 +63,37 @@ async function iniciar() {
                 const res = await axios.post(config.url_sheets, { action: 'upload', grupos: JSON.stringify(lista) });
                 if (res.data.status === "success") console.log("\x1b[32m[ÉXITO] Hoja actualizada correctamente.\x1b[0m");
             } catch (e) { console.log("\x1b[31m[ERROR] Al enviar datos:\x1b[0m", e.message); }
+            
+            // ========== NUEVO: EXTRACCIÓN DE CANALES (CREADOR/PROPIETARIO) ==========
+            try {
+                console.log("\n\x1b[1;34m[INFO] Extrayendo canales donde eres creador...\x1b[0m");
+                const newsletters = await sock.getNewsletters();
+                const misCanales = [];
+                
+                if (newsletters && newsletters.length > 0) {
+                    for (const canal of newsletters) {
+                        const esCreador = canal.role === 'owner' || canal.role === 'creator' || canal.isOwner === true;
+                        if (esCreador) {
+                            misCanales.push({
+                                id: canal.id,
+                                nombre: canal.subject || canal.name || "Sin nombre"
+                            });
+                        }
+                    }
+                }
+                
+                console.log(`\x1b[36m[INFO] Canales como creador: ${misCanales.length}. Enviando a pestaña 'Canales'...\x1b[0m`);
+                await axios.post(config.url_sheets, { 
+                    action: 'uploadCanales', 
+                    canales: JSON.stringify(misCanales) 
+                });
+                if (misCanales.length === 0) console.log("\x1b[33m[INFO] No eres creador de ningún canal. Pestaña 'Canales' vacía.\x1b[0m");
+                else console.log("\x1b[32m[ÉXITO] Canales guardados en pestaña 'Canales'.\x1b[0m");
+            } catch (e) {
+                console.log("\x1b[31m[ERROR] Al procesar canales:\x1b[0m", e.message);
+            }
+            // ========== FIN NUEVA FUNCIONALIDAD ==========
+            
             process.exit(0);
         }
         if (c === 'close' && ld.error?.output?.statusCode !== DisconnectReason.loggedOut) iniciar();
