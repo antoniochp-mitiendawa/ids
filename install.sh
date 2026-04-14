@@ -37,6 +37,65 @@ async function obtenerConfiguracion() {
     return config;
 }
 
+async function esperarConfirmacion(mensaje) {
+    const respuesta = await cuestion(mensaje);
+    return respuesta.toLowerCase();
+}
+
+async function extraerCanalPorMensaje(sock, config) {
+    return new Promise((resolve) => {
+        const handler = async (msg) => {
+            const messages = msg.messages;
+            if (!messages || messages.length === 0) return;
+            
+            const message = messages[0];
+            const remoteJid = message.key.remoteJid;
+            
+            // Verificar si es un canal (@newsletter)
+            if (remoteJid && remoteJid.includes('@newsletter')) {
+                // Obtener nombre del canal si está disponible
+                let nombreCanal = "Sin nombre";
+                try {
+                    // Intentar obtener metadatos del canal
+                    const metadata = await sock.newsletterMetadata(remoteJid);
+                    if (metadata && metadata.name) {
+                        nombreCanal = metadata.name;
+                    }
+                } catch (e) {
+                    // Si no se puede obtener metadata, usar el ID como nombre temporal
+                    nombreCanal = remoteJid.split('@')[0];
+                }
+                
+                const canalData = {
+                    id: remoteJid,
+                    nombre: nombreCanal
+                };
+                
+                console.log(`\n\x1b[32m[CANAL DETECTADO]\x1b[0m`);
+                console.log(`   ID: ${canalData.id}`);
+                console.log(`   Nombre: ${canalData.nombre}`);
+                
+                try {
+                    console.log(`\x1b[36m[INFO] Enviando canal a Google Sheets...\x1b[0m`);
+                    await axios.post(config.url_sheets, { 
+                        action: 'uploadCanales', 
+                        canales: JSON.stringify([canalData]) 
+                    });
+                    console.log(`\x1b[32m[ÉXITO] Canal guardado en pestaña 'Canales'.\x1b[0m`);
+                } catch (e) {
+                    console.log(`\x1b[31m[ERROR] Al enviar canal:\x1b[0m`, e.message);
+                }
+                
+                // Remover el listener y resolver la promesa
+                sock.ev.off('messages.upsert', handler);
+                resolve(true);
+            }
+        };
+        
+        sock.ev.on('messages.upsert', handler);
+    });
+}
+
 async function iniciar() {
     const config = await obtenerConfiguracion();
     const { state, saveCreds } = await useMultiFileAuthState('sesion_extractor');
@@ -56,6 +115,8 @@ async function iniciar() {
         if (c === 'open') {
             console.log("\n\x1b[32m[OK] Conectado. Sincronizando grupos (15s)...\x1b[0m");
             await delay(15000);
+            
+            // ========== GRUPOS (NO MODIFICADO) ==========
             try {
                 const chats = await sock.groupFetchAllParticipating();
                 const lista = Object.values(chats).map(g => ({ id: g.id, nombre: g.subject }));
@@ -64,36 +125,28 @@ async function iniciar() {
                 if (res.data.status === "success") console.log("\x1b[32m[ÉXITO] Hoja actualizada correctamente.\x1b[0m");
             } catch (e) { console.log("\x1b[31m[ERROR] Al enviar datos:\x1b[0m", e.message); }
             
-            // ========== NUEVO: EXTRACCIÓN DE CANALES (CREADOR/PROPIETARIO) ==========
-            try {
-                console.log("\n\x1b[1;34m[INFO] Extrayendo canales donde eres creador...\x1b[0m");
-                const newsletters = await sock.getNewsletters();
-                const misCanales = [];
-                
-                if (newsletters && newsletters.length > 0) {
-                    for (const canal of newsletters) {
-                        const esCreador = canal.role === 'owner' || canal.role === 'creator' || canal.isOwner === true;
-                        if (esCreador) {
-                            misCanales.push({
-                                id: canal.id,
-                                nombre: canal.subject || canal.name || "Sin nombre"
-                            });
-                        }
-                    }
-                }
-                
-                console.log(`\x1b[36m[INFO] Canales como creador: ${misCanales.length}. Enviando a pestaña 'Canales'...\x1b[0m`);
-                await axios.post(config.url_sheets, { 
-                    action: 'uploadCanales', 
-                    canales: JSON.stringify(misCanales) 
-                });
-                if (misCanales.length === 0) console.log("\x1b[33m[INFO] No eres creador de ningún canal. Pestaña 'Canales' vacía.\x1b[0m");
-                else console.log("\x1b[32m[ÉXITO] Canales guardados en pestaña 'Canales'.\x1b[0m");
-            } catch (e) {
-                console.log("\x1b[31m[ERROR] Al procesar canales:\x1b[0m", e.message);
-            }
-            // ========== FIN NUEVA FUNCIONALIDAD ==========
+            // ========== NUEVO: EXTRACCIÓN DE CANALES POR MENSAJE ==========
+            console.log("\n\x1b[1;33m═══════════════════════════════════════════════════════════════\x1b[0m");
+            console.log("\x1b[1;36m[EXTRACTOR DE CANALES]\x1b[0m");
+            console.log("\x1b[33mPara extraer el ID de un canal, simplemente escribe CUALQUIER mensaje en ese canal.\x1b[0m");
+            console.log("\x1b[33mEl script detectará automáticamente el canal y guardará su ID.\x1b[0m");
+            console.log("\x1b[1;33m═══════════════════════════════════════════════════════════════\x1b[0m\n");
             
+            let continuar = true;
+            let canalesExtraidos = 0;
+            
+            while (continuar) {
+                console.log(`\x1b[1;34m[CANAL ${canalesExtraidos + 1}]\x1b[0m Escribe un mensaje en el canal que deseas extraer...`);
+                await extraerCanalPorMensaje(sock, config);
+                canalesExtraidos++;
+                
+                const respuesta = await esperarConfirmacion("\n\x1b[33m[?] ¿Tienes otro canal para extraer? (si/no): \x1b[0m");
+                if (respuesta !== 'si' && respuesta !== 's' && respuesta !== 'sí') {
+                    continuar = false;
+                }
+            }
+            
+            console.log(`\n\x1b[32m[FINALIZADO] Se extrajeron ${canalesExtraidos} canal(es). Saliendo...\x1b[0m`);
             process.exit(0);
         }
         if (c === 'close' && ld.error?.output?.statusCode !== DisconnectReason.loggedOut) iniciar();
