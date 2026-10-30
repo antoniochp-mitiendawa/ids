@@ -2,89 +2,18 @@
 
 echo -e "\n\e[1;34m[1/5] ACTUALIZANDO SISTEMA...\e[0m"
 pkg update -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
-UPDATE_OK=$?
-if [ $UPDATE_OK -ne 0 ]; then
-    echo -e "\e[1;33m[AVISO] Falló pkg update. Intentando cambiar mirror...\e[0m"
-    termux-change-repo <<< $'\n\n'
-    pkg update -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
-    UPDATE_OK=$?
-fi
-if [ $UPDATE_OK -eq 0 ]; then
-    echo -e "\e[1;32m[OK] Listas de paquetes actualizadas.\e[0m"
-else
-    echo -e "\e[1;31m[ERROR] Falló actualización. Ejecuta manualmente: termux-change-repo\e[0m"
-    exit 1
-fi
-
-echo -e "\n\e[1;34m[1.5/5] ACTUALIZANDO PAQUETES INSTALADOS...\e[0m"
 pkg upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
-if [ $? -eq 0 ]; then
-    echo -e "\e[1;32m[OK] Paquetes actualizados.\e[0m"
-else
-    echo -e "\e[1;33m[AVISO] pkg upgrade tuvo problemas, continuando de todos modos...\e[0m"
-fi
+if [ $? -eq 0 ]; then echo -e "\e[1;32m[OK] Sistema actualizado.\e[0m"; else echo -e "\e[1;31m[ERROR] Falló actualización.\e[0m"; exit 1; fi
 
 echo -e "\n\e[1;34m[2/5] INSTALANDO HERRAMIENTAS...\e[0m"
-pkg install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" \
-    nodejs git python clang make binutils libsqlite openssl libffi
-if [ $? -eq 0 ]; then
-    echo -e "\e[1;32m[OK] Herramientas instaladas.\e[0m"
-else
-    echo -e "\e[1;31m[ERROR] Falló instalación de herramientas.\e[0m"
-    exit 1
-fi
-
-echo -e "\n\e[1;34m[2.5/5] VERIFICANDO NODE.JS...\e[0m"
-hash -r 2>/dev/null
-NODE_BIN="/data/data/com.termux/files/usr/bin/node"
-if [ ! -x "$NODE_BIN" ]; then
-    NODE_BIN=$(command -v node 2>/dev/null)
-fi
-if [ -z "$NODE_BIN" ] || [ ! -x "$NODE_BIN" ]; then
-    echo -e "\e[1;33m[AVISO] node no encontrado en PATH. Recargando profile...\e[0m"
-    source /data/data/com.termux/files/usr/etc/profile 2>/dev/null
-    hash -r 2>/dev/null
-    NODE_BIN="/data/data/com.termux/files/usr/bin/node"
-    if [ ! -x "$NODE_BIN" ]; then
-        NODE_BIN=$(command -v node 2>/dev/null)
-    fi
-fi
-if [ -z "$NODE_BIN" ] || [ ! -x "$NODE_BIN" ]; then
-    echo -e "\e[1;33m[AVISO] node sigue sin aparecer. Reinstalando nodejs...\e[0m"
-    pkg reinstall nodejs -y
-    hash -r 2>/dev/null
-    NODE_BIN="/data/data/com.termux/files/usr/bin/node"
-    if [ ! -x "$NODE_BIN" ]; then
-        NODE_BIN=$(command -v node 2>/dev/null)
-    fi
-fi
-if [ -z "$NODE_BIN" ] || [ ! -x "$NODE_BIN" ]; then
-    echo -e "\e[1;31m[ERROR] Node.js no encontrado tras reinstalar. Aborta.\e[0m"
-    exit 1
-fi
-NODE_VERSION=$("$NODE_BIN" -v 2>/dev/null | sed 's/v//' | cut -d. -f1)
-if [ -z "$NODE_VERSION" ] || [ "$NODE_VERSION" -lt 18 ]; then
-    echo -e "\e[1;31m[ERROR] Node.js >= 18 requerido. Versión actual: $("$NODE_BIN" -v 2>/dev/null)\e[0m"
-    exit 1
-fi
-echo -e "\e[1;32m[OK] Node.js $("$NODE_BIN" -v) detectado en $NODE_BIN\e[0m"
+pkg install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" nodejs git python clang make binutils
+if [ $? -eq 0 ]; then echo -e "\e[1;32m[OK] Herramientas instaladas.\e[0m"; else echo -e "\e[1;31m[ERROR] Falló instalación.\e[0m"; exit 1; fi
 
 echo -e "\n\e[1;34m[3/5] PREPARANDO DIRECTORIO Y LIBRERÍAS...\e[0m"
 mkdir -p $HOME/extractor_ids && cd $HOME/extractor_ids
 npm init -y > /dev/null 2>&1
-npm install @whiskeysockets/baileys pino axios --force
-if [ $? -eq 0 ]; then
-    echo -e "\e[1;32m[OK] Librerías instaladas.\e[0m"
-else
-    echo -e "\e[1;33m[AVISO] Falló npm install. Reintentando sin --force...\e[0m"
-    npm install @whiskeysockets/baileys pino axios
-    if [ $? -eq 0 ]; then
-        echo -e "\e[1;32m[OK] Librerías instaladas en reintento.\e[0m"
-    else
-        echo -e "\e[1;31m[ERROR] Falló NPM. Revisa los errores arriba.\e[0m"
-        exit 1
-    fi
-fi
+npm install @whiskeysockets/baileys pino axios readline --force
+if [ $? -eq 0 ]; then echo -e "\e[1;32m[OK] Librerías instaladas.\e[0m"; else echo -e "\e[1;31m[ERROR] Falló NPM.\e[0m"; exit 1; fi
 
 echo -e "\n\e[1;34m[4/5] CREANDO EXTRACTOR...\e[0m"
 cat << 'EOF' > extractor.js
