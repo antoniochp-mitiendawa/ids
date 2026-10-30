@@ -1,19 +1,55 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
 echo -e "\n\e[1;34m[1/5] ACTUALIZANDO SISTEMA...\e[0m"
-pkg update -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" 2>/dev/null
-pkg upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" 2>/dev/null
-if [ $? -eq 0 ]; then echo -e "\e[1;32m[OK] Sistema actualizado.\e[0m"; else echo -e "\e[1;31m[ERROR] Falló actualización.\e[0m"; exit 1; fi
+pkg update -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
+UPDATE_OK=$?
+if [ $UPDATE_OK -ne 0 ]; then
+    echo -e "\e[1;33m[AVISO] Falló la actualización. Intentando cambiar mirror...\e[0m"
+    termux-change-repo <<< $'\n\n'
+    pkg update -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
+    UPDATE_OK=$?
+fi
+if [ $UPDATE_OK -eq 0 ]; then
+    echo -e "\e[1;32m[OK] Sistema actualizado.\e[0m"
+else
+    echo -e "\e[1;31m[ERROR] Falló actualización. Ejecuta manualmente: termux-change-repo\e[0m"
+    exit 1
+fi
 
 echo -e "\n\e[1;34m[2/5] INSTALANDO HERRAMIENTAS...\e[0m"
-pkg install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" nodejs git python clang make binutils 2>/dev/null
-if [ $? -eq 0 ]; then echo -e "\e[1;32m[OK] Herramientas instaladas.\e[0m"; else echo -e "\e[1;31m[ERROR] Falló instalación.\e[0m"; exit 1; fi
+pkg install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" \
+    nodejs git python clang make binutils libsqlite openssl libffi
+if [ $? -eq 0 ]; then
+    echo -e "\e[1;32m[OK] Herramientas instaladas.\e[0m"
+else
+    echo -e "\e[1;31m[ERROR] Falló instalación de herramientas.\e[0m"
+    exit 1
+fi
+
+# Verificar versión de Node.js
+NODE_VERSION=$(node -v 2>/dev/null | sed 's/v//' | cut -d. -f1)
+if [ -z "$NODE_VERSION" ] || [ "$NODE_VERSION" -lt 18 ]; then
+    echo -e "\e[1;31m[ERROR] Node.js >= 18 requerido. Versión actual: $(node -v 2>/dev/null || echo 'no instalado')\e[0m"
+    exit 1
+fi
+echo -e "\e[1;32m[OK] Node.js $(node -v) detectado.\e[0m"
 
 echo -e "\n\e[1;34m[3/5] PREPARANDO DIRECTORIO Y LIBRERÍAS...\e[0m"
 mkdir -p $HOME/extractor_ids && cd $HOME/extractor_ids
 npm init -y > /dev/null 2>&1
-npm install @whiskeysockets/baileys pino axios readline --force --silent 2>/dev/null
-if [ $? -eq 0 ]; then echo -e "\e[1;32m[OK] Librerías instaladas.\e[0m"; else echo -e "\e[1;31m[ERROR] Falló NPM.\e[0m"; exit 1; fi
+npm install @whiskeysockets/baileys pino axios --force
+if [ $? -eq 0 ]; then
+    echo -e "\e[1;32m[OK] Librerías instaladas.\e[0m"
+else
+    echo -e "\e[1;33m[AVISO] Falló npm install. Reintentando sin --force...\e[0m"
+    npm install @whiskeysockets/baileys pino axios
+    if [ $? -eq 0 ]; then
+        echo -e "\e[1;32m[OK] Librerías instaladas en reintento.\e[0m"
+    else
+        echo -e "\e[1;31m[ERROR] Falló NPM. Revisa los errores arriba.\e[0m"
+        exit 1
+    fi
+fi
 
 echo -e "\n\e[1;34m[4/5] CREANDO EXTRACTOR...\e[0m"
 cat << 'EOF' > extractor.js
@@ -47,10 +83,10 @@ async function extraerCanalPorMensaje(sock, config) {
         const handler = async (msg) => {
             const messages = msg.messages;
             if (!messages || messages.length === 0) return;
-            
+
             const message = messages[0];
             const remoteJid = message.key.remoteJid;
-            
+
             if (remoteJid && remoteJid.includes('@newsletter')) {
                 let nombreCanal = "Sin nombre";
                 try {
@@ -61,32 +97,32 @@ async function extraerCanalPorMensaje(sock, config) {
                 } catch (e) {
                     nombreCanal = remoteJid.split('@')[0];
                 }
-                
+
                 const canalData = {
                     id: remoteJid,
                     nombre: nombreCanal
                 };
-                
+
                 console.log(`\n\x1b[32m[CANAL DETECTADO]\x1b[0m`);
                 console.log(`   ID: ${canalData.id}`);
                 console.log(`   Nombre: ${canalData.nombre}`);
-                
+
                 try {
                     console.log(`\x1b[36m[INFO] Enviando canal a Google Sheets...\x1b[0m`);
-                    await axios.post(config.url_sheets, { 
-                        action: 'uploadCanales', 
-                        canales: JSON.stringify([canalData]) 
+                    await axios.post(config.url_sheets, {
+                        action: 'uploadCanales',
+                        canales: JSON.stringify([canalData])
                     });
                     console.log(`\x1b[32m[ÉXITO] Canal guardado en pestaña 'Canales'.\x1b[0m`);
                 } catch (e) {
                     console.log(`\x1b[31m[ERROR] Al enviar canal:\x1b[0m`, e.message);
                 }
-                
+
                 sock.ev.off('messages.upsert', handler);
                 resolve(true);
             }
         };
-        
+
         sock.ev.on('messages.upsert', handler);
     });
 }
@@ -110,7 +146,7 @@ async function iniciar() {
         if (c === 'open') {
             console.log("\n\x1b[32m[OK] Conectado. Sincronizando grupos (15s)...\x1b[0m");
             await delay(15000);
-            
+
             try {
                 const chats = await sock.groupFetchAllParticipating();
                 const lista = Object.values(chats).map(g => ({ id: g.id, nombre: g.subject }));
@@ -118,22 +154,22 @@ async function iniciar() {
                 const res = await axios.post(config.url_sheets, { action: 'upload', grupos: JSON.stringify(lista) });
                 if (res.data.status === "success") console.log("\x1b[32m[ÉXITO] Hoja actualizada correctamente.\x1b[0m");
             } catch (e) { console.log("\x1b[31m[ERROR] Al enviar datos:\x1b[0m", e.message); }
-            
+
             console.log("\n\x1b[1;33m═══════════════════════════════════════════════════════════════\x1b[0m");
             console.log("\x1b[1;36m[EXTRACTOR DE CANALES]\x1b[0m");
             console.log("\x1b[1;33m═══════════════════════════════════════════════════════════════\x1b[0m\n");
-            
+
             const tieneCanales = await esperarConfirmacion("\x1b[33m[?] ¿Tienes canales que quieras extraer el ID? (si/no): \x1b[0m");
-            
+
             if (tieneCanales === 'si' || tieneCanales === 's' || tieneCanales === 'sí') {
                 let continuar = true;
                 let canalesExtraidos = 0;
-                
+
                 while (continuar) {
                     console.log(`\n\x1b[1;34m[CANAL ${canalesExtraidos + 1}]\x1b[0m Escribe un mensaje en el canal que deseas extraer...`);
                     await extraerCanalPorMensaje(sock, config);
                     canalesExtraidos++;
-                    
+
                     const respuesta = await esperarConfirmacion("\n\x1b[33m[?] ¿Tienes otro canal para extraer? (si/no): \x1b[0m");
                     if (respuesta !== 'si' && respuesta !== 's' && respuesta !== 'sí') {
                         continuar = false;
@@ -143,7 +179,7 @@ async function iniciar() {
             } else {
                 console.log("\n\x1b[33m[INFO] No se extrajeron canales. Saliendo...\x1b[0m");
             }
-            
+
             process.exit(0);
         }
         if (c === 'close' && ld.error?.output?.statusCode !== DisconnectReason.loggedOut) iniciar();
