@@ -33,7 +33,8 @@ const cuestion = (t) => new Promise((r) => rl.question(t, r));
 async function obtenerConfiguracion() {
     if (fs.existsSync(CONFIG_FILE)) return JSON.parse(fs.readFileSync(CONFIG_FILE));
     console.log("\n\x1b[44m\x1b[37m CONFIGURACIÓN INICIAL \x1b[0m");
-    const url = await cuestion("\x1b[33m[ ? ] Pega tu URL de Google Sheets: \x1b[0m");
+    console.log("\x1b[33m[!] IMPORTANTE: Pega la URL de implementación de Apps Script (terminada en /exec), NO el ID de la hoja.\x1b[0m");
+    const url = await cuestion("\x1b[33m[ ? ] Pega tu URL de Apps Script: \x1b[0m");
     const config = { url_sheets: url.trim() };
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
     console.log("\x1b[32m[OK] URL guardada en config.json\x1b[0m");
@@ -78,7 +79,7 @@ async function extraerCanalPorMensaje(sock, config) {
                     console.log(`\x1b[36m[INFO] Enviando canal a Google Sheets...\x1b[0m`);
                     await axios.post(config.url_sheets, { 
                         action: 'uploadCanales', 
-                        canales: [canalData] 
+                        canales: JSON.stringify([canalData]) 
                     }, {
                         headers: { 'Content-Type': 'application/json' },
                         maxRedirects: 5
@@ -124,13 +125,17 @@ async function iniciar() {
                 
                 const res = await axios.post(config.url_sheets, { 
                     action: 'upload', 
-                    grupos: lista 
+                    grupos: JSON.stringify(lista) 
                 }, {
                     headers: { 'Content-Type': 'application/json' },
                     maxRedirects: 5
                 });
                 
-                console.log("\x1b[32m[ÉXITO] Hoja actualizada correctamente.\x1b[0m");
+                if (res.data && res.data.status === "success") {
+                    console.log("\x1b[32m[ÉXITO] Hoja actualizada correctamente.\x1b[0m");
+                } else {
+                    console.log("\x1b[33m[AVISO] Datos enviados, respuesta del servidor:\x1b[0m", JSON.stringify(res.data));
+                }
             } catch (e) { console.log("\x1b[31m[ERROR] Al enviar datos:\x1b[0m", e.message); }
             
             console.log("\n\x1b[1;33m═══════════════════════════════════════════════════════════════\x1b[0m");
