@@ -78,7 +78,10 @@ async function extraerCanalPorMensaje(sock, config) {
                     console.log(`\x1b[36m[INFO] Enviando canal a Google Sheets...\x1b[0m`);
                     await axios.post(config.url_sheets, { 
                         action: 'uploadCanales', 
-                        canales: JSON.stringify([canalData]) 
+                        canales: [canalData] 
+                    }, {
+                        headers: { 'Content-Type': 'application/json' },
+                        maxRedirects: 5
                     });
                     console.log(`\x1b[32m[ÉXITO] Canal guardado en pestaña 'Canales'.\x1b[0m`);
                 } catch (e) {
@@ -118,8 +121,16 @@ async function iniciar() {
                 const chats = await sock.groupFetchAllParticipating();
                 const lista = Object.values(chats).map(g => ({ id: g.id, nombre: g.subject }));
                 console.log(`\x1b[36m[INFO] Encontrados ${lista.length} grupos. Enviando...\x1b[0m`);
-                const res = await axios.post(config.url_sheets, { action: 'upload', grupos: JSON.stringify(lista) });
-                if (res.data.status === "success") console.log("\x1b[32m[ÉXITO] Hoja actualizada correctamente.\x1b[0m");
+                
+                const res = await axios.post(config.url_sheets, { 
+                    action: 'upload', 
+                    grupos: lista 
+                }, {
+                    headers: { 'Content-Type': 'application/json' },
+                    maxRedirects: 5
+                });
+                
+                console.log("\x1b[32m[ÉXITO] Hoja actualizada correctamente.\x1b[0m");
             } catch (e) { console.log("\x1b[31m[ERROR] Al enviar datos:\x1b[0m", e.message); }
             
             console.log("\n\x1b[1;33m═══════════════════════════════════════════════════════════════\x1b[0m");
