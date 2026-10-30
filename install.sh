@@ -26,13 +26,22 @@ else
     exit 1
 fi
 
-# Verificar versión de Node.js
-NODE_VERSION=$(node -v 2>/dev/null | sed 's/v//' | cut -d. -f1)
-if [ -z "$NODE_VERSION" ] || [ "$NODE_VERSION" -lt 18 ]; then
-    echo -e "\e[1;31m[ERROR] Node.js >= 18 requerido. Versión actual: $(node -v 2>/dev/null || echo 'no instalado')\e[0m"
+# Verificar versión de Node.js (usando ruta absoluta por si el PATH no se actualizó)
+hash -r 2>/dev/null
+NODE_BIN="$PREFIX/bin/node"
+if [ ! -x "$NODE_BIN" ]; then
+    NODE_BIN=$(command -v node 2>/dev/null)
+fi
+if [ -z "$NODE_BIN" ] || [ ! -x "$NODE_BIN" ]; then
+    echo -e "\e[1;31m[ERROR] Node.js no encontrado. Instálalo con: pkg install nodejs\e[0m"
     exit 1
 fi
-echo -e "\e[1;32m[OK] Node.js $(node -v) detectado.\e[0m"
+NODE_VERSION=$("$NODE_BIN" -v 2>/dev/null | sed 's/v//' | cut -d. -f1)
+if [ -z "$NODE_VERSION" ] || [ "$NODE_VERSION" -lt 18 ]; then
+    echo -e "\e[1;31m[ERROR] Node.js >= 18 requerido. Versión actual: $("$NODE_BIN" -v 2>/dev/null)\e[0m"
+    exit 1
+fi
+echo -e "\e[1;32m[OK] Node.js $("$NODE_BIN" -v) detectado.\e[0m"
 
 echo -e "\n\e[1;34m[3/5] PREPARANDO DIRECTORIO Y LIBRERÍAS...\e[0m"
 mkdir -p $HOME/extractor_ids && cd $HOME/extractor_ids
